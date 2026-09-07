@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-service
+  template:
+    metadata:
+      labels:
+        app: agent-service
+    spec:
+      containers:
+        - name: agent
+          image: agent-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: TOOL_URL
+              value: "http://tool-service:8001/run"
+            - name: PROMPT_PATH
+              value: "/prompts/default.txt"
+            - name: AGENT_VERSION
+              value: "v1"
+          volumeMounts:
+            - name: prompt-volume
+              mountPath: /prompts
+      volumes:
+        - name: prompt-volume
+          configMap:
+            name: agent-prompts
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+spec:
+  selector:
+    app: agent-service
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

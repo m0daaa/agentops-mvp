@@ -1,0 +1,9 @@
+timestamp,configmap,key,baseline_version,expected_version,observed_version,matched,latency_s,poll_attempts,poll_interval_s
+2026-09-06T10:18:59.453116,agent-prompts,default.txt,b67c36ee,f346dab4,b67c36ee,False,31.4545,12,0.1
+2026-09-06T10:19:12.596181,agent-prompts,default.txt,b67c36ee,966ddef0,966ddef0,True,10.4597,4,0.1
+2026-09-06T10:19:47.026078,agent-prompts,default.txt,966ddef0,5b23ec83,966ddef0,False,31.6679,12,0.1
+2026-09-06T10:21:45.884600,agent-prompts,default.txt,5b23ec83,ef7d76b0,ef7d76b0,True,13.3079,5,0.1
+2026-09-06T10:22:49.012151,agent-prompts,default.txt,ef7d76b0,1a3762e7,1a3762e7,True,60.4083,23,0.1
+2026-09-06T10:24:13.171511,agent-prompts,default.txt,1a3762e7,74f03209,74f03209,True,81.4252,31,0.1
+2026-09-06T10:25:18.769936,agent-prompts,default.txt,74f03209,d232eb05,d232eb05,True,62.8472,24,0.1
+2026-09-06T10:26:29.511477,agent-prompts,default.txt,d232eb05,29768758,29768758,True,68.0488,26,0.1

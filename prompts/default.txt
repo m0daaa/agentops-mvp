@@ -1,0 +1,3 @@
+Default prompt for AgentOps MVP.
+
+Task: Return the input uppercased and a short note that the prompt version was read.

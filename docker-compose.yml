@@ -1,0 +1,46 @@
+version: "3.8"
+services:
+  tool-service:
+    build: ./tool-service
+    ports:
+      - "8001:8001"
+    environment:
+      - TOOL_VERSION=v1
+    volumes:
+      - traces:/traces
+
+  agent-service:
+    build: ./agent-service
+    ports:
+      - "8000:8000"
+    environment:
+      - TOOL_URL=http://tool-service:8001/run
+      - OBS_URL=http://observability:9000/trace
+      - AGENT_VERSION=v1
+      - PROMPT_PATH=/prompts/default.txt
+    volumes:
+      - ./prompts:/prompts:ro
+      - traces:/traces
+    depends_on:
+      - tool-service
+
+  observability:
+    build: ./observability
+    ports:
+      - "9000:9000"
+    volumes:
+      - traces:/traces
+
+  baseline:
+    build: ./baseline
+    ports:
+      - "8002:8000"
+    environment:
+      - BASELINE_VERSION=baseline-0.1
+      - TOOL_SLEEP_MS=100
+    volumes:
+      - ./prompts:/prompts:ro
+      - traces:/traces
+
+volumes:
+  traces:

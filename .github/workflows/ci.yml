@@ -1,0 +1,72 @@
+name: CI
+
+# 觸發時機：push 到 main、對 main 開 PR、或在 GitHub 網頁 Actions 分頁手動按 "Run workflow"
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 這一步只是確認每個服務的 Dockerfile 都能成功 build 出 image。
+      # Dockerfile 語法錯誤、requirements.txt 裝不起來，都會在這裡先被擋下來，
+      # 不用等到手動 kubectl apply 才發現。
+      - name: Build service images
+        run: docker compose build
+
+      - name: Start agent-service + tool-service
+        run: docker compose up -d agent-service tool-service
+
+      # uvicorn 啟動需要一點時間，用重試迴圈代替單純的 sleep，比較不會因為
+      # runner 那台機器比較慢就誤判失敗
+      - name: Wait for agent-service to become ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf -X POST http://localhost:8000/invoke \
+                 -H "Content-Type: application/json" \
+                 -d '{"input":"ci-warmup","request_id":"ci-warmup"}' > /dev/null; then
+              echo "agent-service is up after $i tries"
+              exit 0
+            fi
+            echo "waiting for agent-service... ($i/20)"
+            sleep 2
+          done
+          echo "agent-service never became ready"
+          docker compose logs
+          exit 1
+
+      # 真正打一次 agent -> tool 的完整呼叫鏈，檢查回傳的 status 是不是 "ok"
+      - name: Smoke test - one real request through agent -> tool
+        run: |
+          resp=$(curl -sf -X POST http://localhost:8000/invoke \
+            -H "Content-Type: application/json" \
+            -d '{"input":"ci-smoke-test","request_id":"ci-smoke-1"}')
+          echo "$resp"
+          status=$(echo "$resp" | jq -r '.status')
+          if [ "$status" != "ok" ]; then
+            echo "smoke test failed: status=$status"
+            exit 1
+          fi
+          echo "smoke test passed, prompt_version=$(echo "$resp" | jq -r '.prompt_version')"
+
+      # 用縮小版的 bench.py 跑一下併發請求，確認在小流量下不會炸掉
+      # （這不是 Experiment B 那種正式壓測，只是 CI 裡的健檢，所以量開得很小）
+      - name: Mini load test (scaled-down bench.py)
+        run: |
+          pip install requests
+          python3 bench.py --url http://localhost:8000/invoke --concurrency 5 --requests 50
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

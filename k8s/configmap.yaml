@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-prompts
+data:
+  default.txt: |
+    Default prompt for AgentOps MVP.
+    Task: Return the input lowercased and a short note that the prompt version was read.

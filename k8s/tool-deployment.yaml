@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tool-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tool-service
+  template:
+    metadata:
+      labels:
+        app: tool-service
+    spec:
+      containers:
+        - name: tool
+          image: tool-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          env:
+            - name: TOOL_VERSION
+              value: "v1"
+            - name: TOOL_SLEEP_MS
+              value: "100"
+            - name: TOOL_BUSY_MS
+              value: "0"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tool-service
+spec:
+  selector:
+    app: tool-service
+  ports:
+    - protocol: TCP
+      port: 8001
+      targetPort: 8001

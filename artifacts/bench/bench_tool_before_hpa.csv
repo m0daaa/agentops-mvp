@@ -1,0 +1,2 @@
+timestamp,url,format,concurrency,requests,errors,total_time_s,throughput_rps,p50_ms,p95_ms,p99_ms,mean_ms
+2026-08-31T07:32:20.021509,http://localhost:8001/run,tool,100,10000,0,24.3701,410.3394,230.5633,276.1114,282.1203,240.7951

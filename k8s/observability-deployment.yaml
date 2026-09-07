@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observability
+  template:
+    metadata:
+      labels:
+        app: observability
+    spec:
+      containers:
+        - name: observability
+          image: observability:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+          env:
+            - name: TRACES_DIR
+              value: "/traces"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability
+spec:
+  selector:
+    app: observability
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000
