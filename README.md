@@ -4,6 +4,8 @@ This project is a compact AgentOps prototype for validating a decoupled architec
 
 The main goal is to test whether a slow or busy tool layer can be handled by scaling only the tool service, while keeping the agent layer stable.
 
+> 想直接把整個系統跑起來看三個實驗？先看 [DEMO_GUIDE.md](DEMO_GUIDE.md)。
+
 ## Project structure
 
 - [agent-service](agent-service): FastAPI service that receives agent requests and calls the tool service.
@@ -12,7 +14,7 @@ The main goal is to test whether a slow or busy tool layer can be handled by sca
 - [observability](observability): trace collector that stores request traces.
 - [prompts](prompts): prompt payloads and config used by the agent.
 - [k8s](k8s): Kubernetes deployment manifests and Minikube setup instructions.
-- [artifacts/bench](artifacts/bench): benchmark CSVs, plots, and notes for performance and HPA experiments.
+- [artifacts/bench](artifacts/bench): benchmark CSVs, plots, and notes for performance and HPA experiments. Start with [artifacts/README.md](artifacts/README.md) for a map of which file is which.
 - [bench.py](bench.py): concurrent load generator used for local and Kubernetes benchmarking.
 - [docker-compose.yml](docker-compose.yml): local multi-service startup for development and smoke testing.
 

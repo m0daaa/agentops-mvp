@@ -34,7 +34,7 @@ CSV raw data are in this folder: `bench_agent.csv`, `bench_baseline.csv`.
 
 Throughput vs Concurrency:
 
-![Throughput](bench_throughput.png)
+![Throughput](docs/bench_throughput.png)
 
 Latency (p50 & p95) vs Concurrency:
 
