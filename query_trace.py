@@ -26,10 +26,10 @@ def list_traces(base_url: str, limit: int):
     if not traces:
         print("No traces found.")
         return
-    print(f"{'request_id':<38} {'status':<8} {'prompt_version':<16} timestamp")
+    print(f"{'request_id':<38} {'status':<8} {'prompt_version':<16} {'model_version':<14} timestamp")
     for t in traces:
         print(f"{t.get('request_id', ''):<38} {t.get('status', ''):<8} "
-              f"{t.get('prompt_version', ''):<16} {t.get('timestamp', '')}")
+              f"{t.get('prompt_version', ''):<16} {t.get('model_version', '') or '-':<14} {t.get('timestamp', '')}")
 
 
 def get_trace(base_url: str, request_id: str):

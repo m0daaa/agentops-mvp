@@ -21,8 +21,8 @@ jobs:
       - name: Build service images
         run: docker compose build
 
-      - name: Start agent-service + tool-service
-        run: docker compose up -d agent-service tool-service
+      - name: Start agent-service + tool-service + model-service
+        run: docker compose up -d agent-service tool-service model-service
 
       # uvicorn 啟動需要一點時間，用重試迴圈代替單純的 sleep，比較不會因為
       # runner 那台機器比較慢就誤判失敗
@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
           echo "smoke test passed, prompt_version=$(echo "$resp" | jq -r '.prompt_version')"
-
+          echo "model_version=$(echo "$resp" | jq -r '.tool_result.model_version')"
       # 用縮小版的 bench.py 跑一下併發請求，確認在小流量下不會炸掉
       # （這不是 Experiment B 那種正式壓測，只是 CI 裡的健檢，所以量開得很小）
       - name: Mini load test (scaled-down bench.py)

@@ -179,22 +179,105 @@ python query_trace.py --request-id demo-trace-001
 
 ---
 
-## 6. CI：push 之後自動驗證
+## 6. Model 層獨立更新重現：換版本不影響 Tool
+
+這一段展示第三個「獨立生命週期」的證據：**model-service 換版本（v1 → v2），不需要重建/重啟 tool-service**，跟 Experiment A（Prompt 換版本不影響 Agent）是同一種論證，只是換到 Model 這一層。model-service 走的是普通 K8s Deployment 的 image-tag 滾動更新，**不是**論文提到的 Kubeflow/KServe（那兩個解決的是模型「訓練」與「serving 排程」，跟本專題「元件解耦、獨立生命週期」的主張無關，詳見 `AgentOps_Next_Phase_Action_Plan.md` 缺漏 5）。
+
+### 6.1 部署 model-service，並開啟 tool-service 呼叫它
+
+```bash
+docker build -t model-service:v1 ./model-service
+minikube image load model-service:v1
+docker tag model-service:v1 model-service:latest
+minikube image load model-service:latest
+
+kubectl apply -f k8s/model-deployment.yaml
+kubectl set env deployment/tool-service CALL_MODEL=true
+```
+
+（K8s 部署預設 `CALL_MODEL=false`，是為了不影響已經定案的 Experiment B 數據；這裡手動開啟只是為了展示這個 demo，不影響那份已發布的結果。）
+
+打一次請求，確認 `tool_result.model_version` 是 `v1`：
+
+```bash
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input":"model-demo","request_id":"model-demo-1"}'
+```
+
+### 6.2 背景持續打流量，觀察 tool-service 全程沒有重啟
+
+另開一個終端機，背景跑一段小流量（模擬「使用中」）：
+
+```bash
+python bench.py --url http://localhost:8000/invoke --concurrency 5 --requests 200
+```
+
+再開一個終端機記下 tool-service pod 現在的名字跟 AGE：
+
+```bash
+kubectl get pods -l app=tool-service
+```
+
+### 6.3 換版本：把 model-service 換成 v2
+
+修改 `model-service/main.py` 的 `MODEL_VERSION = "v1"` 為 `"v2"`，重新 build/load：
+
+```bash
+docker build -t model-service:v2 ./model-service
+minikube image load model-service:v2
+
+kubectl set image deployment/model-service model=model-service:v2
+kubectl rollout status deployment/model-service
+```
+
+### 6.4 驗證：tool-service 沒被動到，agent 請求全程沒斷
+
+```bash
+kubectl get pods -l app=tool-service
+```
+
+跟 6.2 記下的 pod 名字、AGE 比對——應該完全沒變，代表 tool-service 沒有被重啟或重建。同時確認 6.2 那段背景流量沒有出現失敗（`bench.py` 的輸出裡錯誤數應該是 0 或跟換版本前一致）。
+
+再打一次請求，確認 `model_version` 已經變成 `v2`：
+
+```bash
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input":"model-demo-after","request_id":"model-demo-2"}'
+
+python query_trace.py --list
+```
+
+`--list` 的輸出應該可以看到同一段時間內 `model_version` 從 `v1` 變成 `v2`，而 `tool_version` 全程不變。
+
+### 6.5 回滾（rollback）demo
+
+```bash
+kubectl rollout undo deployment/model-service
+kubectl rollout status deployment/model-service
+```
+
+再打一次請求，`model_version` 應該回到 `v1`——這證明 Model 層的版本更新跟回滾，走的是標準 K8s Deployment 機制，跟 Tool/Agent 層是同一套維運邏輯，不需要额外引入 Kubeflow/KServe。
+
+---
+
+## 7. CI：push 之後自動驗證
 
 這個 repo 有一個 GitHub Actions workflow（`.github/workflows/ci.yml`），每次 push 到 `main` 會自動：
 
 1. `docker compose build` 確認每個服務的 image 能建起來
-2. 啟動 agent-service + tool-service，打一次真實的 `/invoke` 驗證 `status: ok`
+2. 啟動 agent-service + tool-service + model-service，打一次真實的 `/invoke` 驗證 `status: ok`（走完整 agent → tool → model 呼叫鏈）
 3. 用縮小版 `bench.py` 做一次併發健檢
 
 去 repo 的 **Actions** 分頁可以看到每次 push 的結果（綠勾 = 過、紅叉 = 壞）。這個 CI 只驗證服務本身能不能正常運作，**不會碰 Minikube**，K8s 的部署還是照本文件手動操作。
 
 ---
 
-## 7. 收尾
+## 8. 收尾
 
 ```bash
-kubectl delete -f k8s/hpa.yaml -f k8s/observability-deployment.yaml -f k8s/tool-deployment.yaml -f k8s/agent-deployment.yaml -f k8s/configmap.yaml
+kubectl delete -f k8s/hpa.yaml -f k8s/observability-deployment.yaml -f k8s/tool-deployment.yaml -f k8s/agent-deployment.yaml -f k8s/model-deployment.yaml -f k8s/configmap.yaml
 minikube stop
 ```
 
@@ -213,3 +296,7 @@ minikube stop
 **改了 ConfigMap，等很久 prompt 都沒變**
 
 這是已知、誠實記錄的行為，不是 bug——kubelet 同步 ConfigMap Volume 本來就是週期性的，範圍在 13-81 秒之間都算正常，詳見 `EXPERIMENT_SUMMARY.md` Experiment A。
+
+**開了 `CALL_MODEL=true` 之後 `model_status` 顯示 `error:...`**
+
+代表 tool-service 連不到 model-service，通常是 `k8s/model-deployment.yaml` 還沒 apply，或者 Service 名字打錯。先 `kubectl get pods -l app=model-service` 確認 pod 是 Running，再 `kubectl exec deploy/tool-service -- curl -s http://model-service:8080/predict -X POST -H "Content-Type: application/json" -d '{"request_id":"debug","input":"x"}'` 手動測一次連線。

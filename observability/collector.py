@@ -44,6 +44,7 @@ async def list_traces(limit: int = 50):
             "timestamp": body.get("timestamp"),
             "status": body.get("status"),
             "prompt_version": body.get("prompt_version"),
+            "model_version": body.get("model_version"),
         })
     return {"count": len(out), "traces": out}
 

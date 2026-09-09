@@ -76,6 +76,7 @@ async def invoke(req: InvokeRequest):
         "agent_version": AGENT_VERSION,
         "tool_version": tool_resp.get("tool_version" if isinstance(tool_resp, dict) else "", ""),
         "tool_latency_ms": tool_resp.get("duration_ms") if isinstance(tool_resp, dict) else None,
+        "model_version": tool_resp.get("model_version") if isinstance(tool_resp, dict) else None,
         "agent_total_ms": duration_ms,
         "status": status,
         "input": req.input,

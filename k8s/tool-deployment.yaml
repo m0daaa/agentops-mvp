@@ -25,6 +25,13 @@ spec:
               value: "100"
             - name: TOOL_BUSY_MS
               value: "0"
+            # 預設關閉，保護已定案的 Experiment B（HPA/CPU）數據不受新的
+            # model-service 網路呼叫影響。要展示 Model 層獨立更新時，用
+            # `kubectl set env deployment/tool-service CALL_MODEL=true` 手動開啟。
+            - name: CALL_MODEL
+              value: "false"
+            - name: MODEL_URL
+              value: "http://model-service:8080/predict"
           resources:
             requests:
               cpu: "200m"
