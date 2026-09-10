@@ -135,6 +135,51 @@ Experiment C 的驗收標準基本達成。
 
 ---
 
+## Experiment D — Model Layer Independent Update
+
+**狀態：✅ 核心機制已驗證（單次乾淨示範，K8s 控制平面證據）**
+
+### 已經證明的事
+
+- `model-service` 是一個獨立的 K8s Deployment（無 HPA，這裡不驗證擴展，只驗證版本切換的獨立性），
+  `tool-service` 透過一般 HTTP 呼叫它（`CALL_MODEL` 環境變數控制是否呼叫；K8s 環境預設
+  `CALL_MODEL=false`，刻意保護 Experiment B 已經定案的數據不受新呼叫路徑影響，demo 時手動開啟）。
+- `MODEL_VERSION` 刻意寫死在 `model-service/main.py` 裡（不是可被 `kubectl set env` 隨手覆蓋的
+  環境變數），呼應 `compute_prompt_version()` 的設計哲學：換版本 = 換一個新 image，而不是改一個
+  config 值，避免版本標記跟實際內容脫鉤。
+- 具體驗證步驟：把 `model-service` 從 `v2` 換成 `v3`（`docker build` 新 image、`minikube image
+  load`、`kubectl set image deployment/model-service`），**全程不對 `tool-service` 下任何指令**。
+- **量測結果（單次示範，換版本前後各打一次 `/invoke`）：**
+
+  | 時間點 | `tool-service` pod 名稱 | AGE | RESTARTS | 回傳的 `model_version` |
+  |---|---|---:|---:|---|
+  | 換版本前 | `tool-service-5554bb6cbf-lzc69` | 50m | 0 | `v2` |
+  | 換版本後 | `tool-service-5554bb6cbf-lzc69` | 51m | 0 | `v3` |
+
+  同一個 pod、AGE 正常累加、RESTARTS 全程是 0——代表 `tool-service` 完全沒有被重建或重啟；
+  同時呼叫鏈末端正確反映了 model-service 的新版本，`tool_version` 全程維持 `v1` 不變。
+
+**結論：** model-service 換版本，透過標準 K8s Deployment 滾動更新機制達成，`tool-service` 不需要
+重建、重啟，也不需要任何額外操作。這證明 Model 這一層跟 Prompt（Experiment A）、Tool
+（Experiment B）一樣具備獨立生命週期——三個異質元件（Prompt / Tool / Model）現在都各自被驗證過
+可以獨立更新、互不牽動，補齊了「元件解耦」核心主張的第三塊拼圖。
+
+### 誠實邊界
+
+- 這是 mock model（回傳一個由輸入長度算出的假字串），驗證的是「版本標籤能不能透過呼叫鏈正確
+  傳遞」以及「K8s 滾動更新機制本身」，不是模型推論品質，也不是真實 serving 延遲。
+- 目前只做了一次乾淨的人工示範（換版本前後各一次請求 + 比對 pod identity），沒有像 Experiment A
+  那樣做多次統計採樣——但這裡要回答的是「pod 有沒有被重建」這種二元、確定性的 K8s 控制平面狀態
+  （不是像延遲那樣有變異的連續數字），單次控制平面證據已經足夠支持這個結論。
+- `DEMO_GUIDE.md` 第 6.5 節寫了 `kubectl rollout undo` 的 rollback demo 步驟，但這次驗證沒有
+  實際跑過並記錄結果，rollback 這條路徑目前還是「應該可行」而非「已驗證」。
+- 還沒測試過「`CALL_MODEL=true` 同時搭配 Experiment B 的 CPU 壓力測試」會不會互相干擾——目前是
+  刻意讓兩個實驗保持獨立、分開測試，還沒有交叉驗證過兩者同時開啟的行為。
+- 還沒測試 model-service 連線失敗時的行為（`model_status` 顯示 `error:...` 的情境目前只在開發
+  過程中偶然觸發過，沒有刻意設計成一個獨立實驗）。
+
+---
+
 ## 整體定位
 
 到目前為止，這個專題已經證明：
@@ -145,6 +190,8 @@ Experiment C 的驗收標準基本達成。
 3. **可觀測性已可查詢、可審計**——每次執行都有結構化 trace，且能用 request_id 查到完整執行紀錄
    （Experiment C 已驗證）。
 4. **Prompt 更新延遲已量化**——平均約 57 秒、範圍 13–81 秒，明顯快於單體式的分鐘級重新部署。
+5. **Model 層版本更新也具備獨立生命週期**——model-service 換版本不需要重建/重啟 tool-service，
+   證據同樣來自 K8s 控制平面狀態（pod identity 不變）（Experiment D 已驗證）。
 
 同時也誠實地知道邊界在哪裡：
 
